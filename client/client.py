@@ -23,7 +23,8 @@ if IS_MISSFIRE:
 else:
     PROT = 'http'
 
-
+FAILS=0
+SUCCESSES=0
 NUM_PAYMENTS_PER_CLIENT = 100
 
 class Simulation():
@@ -34,7 +35,7 @@ class Simulation():
         
         if len(self.customers) == 0:
             print ("No customers to add!")
-            exit()
+            exit(1)
 
         print(("Adding %s bank customers." % (len(self.customers))))
         for customer in self.customers:
@@ -43,14 +44,14 @@ class Simulation():
             if userID:
                 customer['userID'] = userID
             else:
-                exit()
+                exit(1)
 
             if IS_MISSFIRE_TOKEN:
                 token = self.client.login(customer['username'], customer['pwd'])
                 if token:
                     customer['access_token'] = token
                 else:
-                    exit()
+                    exit(1)
             else:
                 customer['access_token'] = "notoken"
 
@@ -59,7 +60,7 @@ class Simulation():
             if accNum:
                 customer['accNum'] = accNum
             else:
-                exit()
+                exit(1)
 
 
     def printPerformance(self):
@@ -95,6 +96,7 @@ class BankClient:
         self.s = requests.Session()
 
     def createUser(self, username, pwd):
+        global FAILS, SUCCESSES
         userID = None
         try:
             url = self.BASE_URL + '/users'
@@ -110,16 +112,21 @@ class BankClient:
             if int(resp.status_code) >= 400:
                 print(("Fail to create user: %s; reason: %s; status: %s" \
                       % (username, resp.text, resp.status_code)))
+                FAILS = FAILS+1
             elif 'id' not in resp.json():
                 print(("'id' not in response msg: %s" % resp.json()))
+                FAILS = FAILS+1
             else:
                 userID = resp.json()['id']
+                SUCCESSES = SUCCESSES+1
                 return userID
         except requests.exceptions.ConnectionError as e:
             print(("Connection error create user: %s" % e))
+            exit(1)
         
 
     def login(self, username, pwd):
+        global FAILS, SUCCESSES
         userID = None
         try:
             url = self.BASE_URL + '/login'
@@ -131,17 +138,21 @@ class BankClient:
             if int(resp.status_code) >= 400:
                 print(("Fail to login user: %s; reason: %s; status: %s" \
                       % (username, resp.text, resp.status_code)))
+                FAILS = FAILS+1
             elif 'access_token' not in resp.json():
                 print(("'access_token' not in response msg: %s" \
                       % resp.json()))
+                FAILS = FAILS+1
             else:
                 access_token = resp.json()['access_token']
+                SUCCESSES = SUCCESSES+1
                 return access_token
         except requests.exceptions.ConnectionError as e:
             print(("Connection error create user: %s" % e))
-        
+            exit(1)
 
     def openAccount(self, userID, token):
+        global FAILS, SUCCESSES
         accNum = None
         url = '{}/users/{}/accounts'.format(self.BASE_URL, userID)
         try:
@@ -151,16 +162,20 @@ class BankClient:
             if int(resp.status_code) >= 400:
                 print(("Fail to open account for user: %s; reason: %s; status: %s" \
                       % (userID, resp.text, resp.status_code)))
+                FAILS = FAILS+1
             elif 'accNum' not in resp.json():
                 print(("'accNum' not in response msg: %s" % resp.json()))
+                FAILS = FAILS+1
             else:
                 accNum = resp.json()['accNum']
-
+                SUCCESSES = SUCCESSES+1
         except requests.exceptions.ConnectionError as e:
             print(("Connection error open account: %s" % e))
+            exit(1)
         return accNum
 
     def pay(self, fromAccNum, toAccNum, amount, userID, token):
+        global FAILS, SUCCESSES
         res = False
         try:
             url = self.BASE_URL + '/users/%s/pay' % userID
@@ -173,17 +188,21 @@ class BankClient:
             if int(resp.status_code) >= 400:
                 print(("Fail to pay: %s; reason: %s; status: %s" \
                       % (payload, resp.text, resp.status_code)))
+                FAILS = FAILS+1
             else:
                 res = True
+                SUCCESSES = SUCCESSES+1
 
         except requests.exceptions.ConnectionError as e:
             print(("Connection error payment: %s" % e))
+            exit(1)
         return res
 
 
 
 
 def main():
+    global FAILS, SUCCESSES
     numProcesses = 1
     queueList = []
     processList = []
@@ -212,10 +231,13 @@ def main():
     operationsPerSec = float(NUM_PAYMENTS_PER_CLIENT*numProcesses / secondsPassed)
     print("Transactions per second (%d/%f): %f" \
          % (NUM_PAYMENTS_PER_CLIENT*numProcesses, secondsPassed, operationsPerSec))
-
+    print("Successes: %d, Fails: %d" % (SUCCESSES, FAILS))
     for p in processList:
         p.join()
-
+    if(FAILS > SUCCESSES):
+        exit(1)
+    else:
+        exit(0)
 
 
 
