@@ -19,7 +19,7 @@ DOCKER_DEL_VOLUMES="docker volume ls | cut -d ' ' -f 16 | xargs docker volume rm
 function arg_parse {
 	usage="$(basename "$0") [-h] [-c (only copy common files, no build)] [-i (Delete all docker files prior to building)] [-b (Disables building)]"
 
-	while getopts 'hcdbrvuf' option; do
+	while getopts 'hcidbrvuf' option; do
 		case "$option" in
 			h) echo "$usage"
 			   exit
@@ -230,7 +230,7 @@ if [ $BUILD_FULL -eq 1 ]; then
 
 	restore_compose_file
 
-	docker-compose up
+	docker-compose up -d
 
 	save_compose_file
 fi
